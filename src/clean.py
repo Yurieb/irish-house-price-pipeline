@@ -40,6 +40,17 @@ def clean_ppr() -> None:
     # and Irish fadas in addresses are stored. dtype=str stops pandas guessing
     # types, so we convert each column ourselves.
     df = pd.read_csv(RAW_DIR / "ppr_all.csv", encoding="cp1252", dtype=str)
+    df = transform_ppr(df)
+    df.to_csv(CLEAN_DIR / "ppr_sales.csv", index=False, encoding="utf-8")
+    print(f"  {len(df):>9,} rows written to ppr_sales.csv")
+
+
+def transform_ppr(df: pd.DataFrame) -> pd.DataFrame:
+    """Turn raw PPR rows into clean ones.
+
+    Kept separate from the file reading and writing so the tests can call it
+    with a few hand-made rows.
+    """
     df.columns = [
         "sale_date", "address", "county", "eircode", "price",
         "not_full_market_price", "vat_exclusive", "description", "size_description",
@@ -73,9 +84,7 @@ def clean_ppr() -> None:
     df["county"] = df["county"].str.strip()
     check_counties(df, "PPR")
 
-    df = df[["sale_date", "address", "county", "eircode", "price", "is_new_build", "vat_added"]]
-    df.to_csv(CLEAN_DIR / "ppr_sales.csv", index=False, encoding="utf-8")
-    print(f"  {len(df):>9,} rows written to ppr_sales.csv")
+    return df[["sale_date", "address", "county", "eircode", "price", "is_new_build", "vat_added"]]
 
 
 def clean_cso(raw_name: str, clean_name: str, statistic: str, value_name: str) -> None:
