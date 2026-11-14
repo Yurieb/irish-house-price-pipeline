@@ -15,7 +15,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 RAW_DIR = PROJECT_ROOT / "data" / "raw"
 CLEAN_DIR = PROJECT_ROOT / "data" / "clean"
 
-# New homes are listed in the PPR without VAT, which is charged at 13.5%.
+# New homes are listed in the PPR without VAT which is charged at 13.5%.
 VAT_RATE = 0.135
 
 COUNTIES = [
@@ -85,7 +85,7 @@ def clean_cso(raw_name: str, clean_name: str, statistic: str, value_name: str) -
     print(f"  {len(df):>9,} rows read")
 
     df = df[df["Statistic Label"] == statistic]
-    # The earnings table is split by sex; we only want the combined figure.
+    # The earnings table is split by sex we only want the combined figure.
     if "Sex" in df.columns:
         df = df[df["Sex"] == "Both sexes"]
     print(f"  {len(df):>9,} after keeping '{statistic}'")
