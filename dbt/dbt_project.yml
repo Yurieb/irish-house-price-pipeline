@@ -1,0 +1,16 @@
+name: house_prices
+version: "1.0.0"
+profile: house_prices
+
+model-paths: ["models"]
+test-paths: ["tests"]
+
+models:
+  house_prices:
+    # Staging models are views: light tidy-ups that always reflect the raw data.
+    staging:
+      +materialized: view
+    # Marts are tables: the medians are computed once, so the app and
+    # Power BI read them instantly.
+    marts:
+      +materialized: table

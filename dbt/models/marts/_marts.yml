@@ -1,0 +1,85 @@
+version: 2
+
+models:
+  - name: mart_median_price
+    description: Median sale price and number of sales for each county and year.
+    columns:
+      - name: county_year_key
+        description: County and year joined together, for example "Dublin-2024". One row per key.
+        data_tests:
+          - unique
+          - not_null
+      - name: county
+        description: One of the 26 counties.
+        data_tests:
+          - not_null
+      - name: year
+        description: Year of sale. The current year is incomplete until it ends.
+        data_tests:
+          - not_null
+      - name: sales_count
+        description: Number of sales the median is based on.
+        data_tests:
+          - not_null
+      - name: median_price
+        description: Median sale price in euro, including VAT.
+        data_tests:
+          - not_null
+
+  - name: mart_price_change
+    description: Year-on-year change in the median price for each county.
+    columns:
+      - name: county_year_key
+        description: County and year joined together. One row per key.
+        data_tests:
+          - unique
+          - not_null
+      - name: county
+        description: One of the 26 counties.
+      - name: year
+        description: Year of sale.
+      - name: median_price
+        description: Median sale price in euro for this year.
+        data_tests:
+          - not_null
+      - name: previous_median_price
+        description: Median sale price in the year before. Null for the first year.
+      - name: change_eur
+        description: This year's median minus last year's, in euro.
+      - name: change_pct
+        description: The change as a percentage of last year's median.
+
+  - name: mart_affordability
+    description: >
+      Price-to-income ratios for each county and year: how many years of income
+      the median home costs. Higher means less affordable.
+    columns:
+      - name: county_year_key
+        description: County and year joined together. One row per key.
+        data_tests:
+          - unique
+          - not_null
+      - name: county
+        description: One of the 26 counties.
+      - name: year
+        description: Year, limited to the years the CSO earnings data covers.
+      - name: median_price
+        description: Median sale price in euro, including VAT.
+        data_tests:
+          - not_null
+      - name: median_earnings_age_25_29
+        description: Median annual earnings of one person aged 25 to 29, in euro.
+        data_tests:
+          - not_null
+      - name: price_to_earnings_age_25_29
+        description: Median price divided by median earnings of a 25 to 29 year old.
+        data_tests:
+          - not_null
+      - name: median_earnings_all_ages
+        description: Median annual earnings of one person of any age, in euro.
+      - name: price_to_earnings_all_ages
+        description: Median price divided by median earnings across all ages.
+      - name: median_gross_household_income
+        description: Median gross household income in euro. Available for 2022 only.
+      - name: price_to_household_income
+        description: Median price divided by median gross household income. 2022 only.

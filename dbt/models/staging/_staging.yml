@@ -1,0 +1,113 @@
+version: 2
+
+sources:
+  - name: raw
+    description: Cleaned source data, loaded into Postgres by src/load.py.
+    schema: raw
+    tables:
+      - name: ppr_sales
+        description: Property Price Register sales at full market price, VAT included.
+      - name: household_income
+        description: CSO table GPIIA05 - median gross household income by county, 2022.
+      - name: annual_earnings
+        description: CSO table DEA06 - median annual earnings by county, year and age group.
+
+models:
+  - name: stg_ppr_sales
+    description: One row per property sale at full market price, with the sale year added.
+    columns:
+      - name: sale_id
+        description: Unique id for the sale, generated when the data is loaded.
+        data_tests:
+          - unique
+          - not_null
+      - name: sale_date
+        description: Date the sale completed.
+        data_tests:
+          - not_null
+      - name: sale_year
+        description: Year of the sale date.
+        data_tests:
+          - not_null
+      - name: county
+        description: One of the 26 counties.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: &counties
+                  - Carlow
+                  - Cavan
+                  - Clare
+                  - Cork
+                  - Donegal
+                  - Dublin
+                  - Galway
+                  - Kerry
+                  - Kildare
+                  - Kilkenny
+                  - Laois
+                  - Leitrim
+                  - Limerick
+                  - Longford
+                  - Louth
+                  - Mayo
+                  - Meath
+                  - Monaghan
+                  - Offaly
+                  - Roscommon
+                  - Sligo
+                  - Tipperary
+                  - Waterford
+                  - Westmeath
+                  - Wexford
+                  - Wicklow
+      - name: price
+        description: Sale price in euro, including VAT.
+        data_tests:
+          - not_null
+      - name: is_new_build
+        description: True for a new home, false for a second-hand one.
+
+  - name: stg_household_income
+    description: Median gross household income per county. Published for 2022 only.
+    columns:
+      - name: county
+        description: One of the 26 counties.
+        data_tests:
+          - not_null
+          - unique
+          - accepted_values:
+              arguments:
+                values: *counties
+      - name: year
+        description: Year the income figure refers to.
+        data_tests:
+          - not_null
+      - name: median_gross_household_income
+        description: Median income of a whole household before tax, in euro.
+        data_tests:
+          - not_null
+
+  - name: stg_annual_earnings
+    description: Median annual earnings of one employed person, per county, year and age group.
+    columns:
+      - name: county
+        description: One of the 26 counties.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: *counties
+      - name: year
+        description: Year the earnings figure refers to.
+        data_tests:
+          - not_null
+      - name: age_group
+        description: Age band, for example "25 - 29 years". "15 years and over" is all ages.
+        data_tests:
+          - not_null
+      - name: median_annual_earnings
+        description: Median gross annual earnings in euro.
+        data_tests:
+          - not_null
