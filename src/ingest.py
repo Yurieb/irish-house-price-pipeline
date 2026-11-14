@@ -1,10 +1,9 @@
-"""Download the raw source data into data/raw/.
+"""Download the raw data into data/raw/.
 
 Run from the project root:
     python src/ingest.py
 
-Safe to re-run: every run downloads the latest files and overwrites the old
-ones, so running it twice leaves the same result as running it once.
+Safe to re-run, it just overwrites the old files.
 """
 
 import io
@@ -15,19 +14,19 @@ import requests
 
 RAW_DIR = Path(__file__).resolve().parents[1] / "data" / "raw"
 
-# Property Price Register: every residential sale since 2010, as one zipped CSV.
+# Property Price Register - all residential sales since 2010 in one zipped CSV
 PPR_URL = (
     "https://www.propertypriceregister.ie/website/npsra/ppr/npsra-ppr.nsf/"
     "Downloads/PPR-ALL.zip/$FILE/PPR-ALL.zip"
 )
 
-# CSO PxStat API: one URL per table, with the table code in the middle.
+# CSO PxStat API, the table code goes in the URL
 CSO_URL = (
     "https://ws.cso.ie/public/api.restful/"
     "PxStat.Data.Cube_API.ReadDataset/{table}/CSV/1.0/en"
 )
 
-# CSO table code -> the file name we save it as.
+# CSO table code -> file name to save as
 CSO_TABLES = {
     "GPIIA05": "cso_household_income.csv",  # household income by county, 2022
     "DEA06": "cso_annual_earnings.csv",  # earnings by county, age group and year
@@ -35,16 +34,16 @@ CSO_TABLES = {
 
 
 def download(url: str) -> bytes:
-    """Fetch a URL and return its content, raising an error if the request fails."""
+    """Download a URL and return the content. Raises an error on a bad response."""
     response = requests.get(url, timeout=120)
     response.raise_for_status()
     return response.content
 
 
 def save(path: Path, data: bytes) -> None:
-    """Write to a temporary file, then rename it over the real one.
+    """Write to a temp file first, then rename it.
 
-    If the write is interrupted, the previous good file is left untouched.
+    If the download fails halfway the old file is still there.
     """
     temp_path = path.with_name(path.name + ".part")
     temp_path.write_bytes(data)
@@ -56,8 +55,7 @@ def ingest_ppr() -> None:
     print("Downloading Property Price Register...")
     zipped = download(PPR_URL)
 
-    # The zip holds a single CSV. It is saved exactly as published: decoding
-    # and fixing the contents is the cleaning step's job.
+    # zip has one CSV in it, save it as is (cleaning happens in clean.py)
     with zipfile.ZipFile(io.BytesIO(zipped)) as archive:
         csv_names = [name for name in archive.namelist() if name.lower().endswith(".csv")]
         if len(csv_names) != 1:

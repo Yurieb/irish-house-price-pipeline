@@ -1,10 +1,9 @@
-"""Load the cleaned CSV files from data/clean/ into Postgres.
+"""Load the cleaned CSVs from data/clean/ into Postgres.
 
-Run from the project root, after src/clean.py, with the database running:
+Run after clean.py with the database running:
     python src/load.py
 
-Safe to re-run: each table is emptied and refilled inside one transaction, so
-the database never holds duplicate or half-loaded data.
+Safe to re-run, each table is emptied and refilled in one transaction.
 """
 
 import csv
@@ -18,7 +17,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CLEAN_DIR = PROJECT_ROOT / "data" / "clean"
 SCHEMA_FILE = PROJECT_ROOT / "sql" / "schema.sql"
 
-# Table in the raw schema -> the cleaned file that fills it.
+# table in the raw schema -> cleaned file that fills it
 TABLES = {
     "ppr_sales": "ppr_sales.csv",
     "household_income": "household_income.csv",
@@ -27,15 +26,14 @@ TABLES = {
 
 
 def load_table(connection, table: str, csv_path: Path) -> None:
-    # Read the header row so COPY knows which columns the file contains.
-    # Columns not in the file (sale_id, loaded_at) take their default values.
+    # get the column names from the CSV header for COPY.
+    # sale_id and loaded_at aren't in the file so they use their defaults
     with open(csv_path, encoding="utf-8", newline="") as file:
         columns = ", ".join(next(csv.reader(file)))
 
     connection.execute(text(f"TRUNCATE raw.{table} RESTART IDENTITY"))
 
-    # COPY is Postgres's bulk-load command: it streams the whole file in one
-    # statement, far faster than one INSERT per row.
+    # COPY bulk loads the whole file, much faster than inserting row by row
     copy_sql = f"COPY raw.{table} ({columns}) FROM STDIN WITH (FORMAT csv, HEADER true)"
     with open(csv_path, encoding="utf-8", newline="") as file:
         with connection.connection.cursor() as cursor:
@@ -48,8 +46,7 @@ def load_table(connection, table: str, csv_path: Path) -> None:
 def main() -> None:
     engine = get_engine()
 
-    # engine.begin() opens a transaction: it commits if everything succeeds
-    # and rolls back completely if anything fails.
+    # one transaction - commits if everything works, rolls back if anything fails
     with engine.begin() as connection:
         print("Applying schema...")
         connection.exec_driver_sql(SCHEMA_FILE.read_text(encoding="utf-8"))

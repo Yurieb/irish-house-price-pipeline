@@ -1,8 +1,8 @@
--- Price-to-income ratios for each county and year: how many years of income
--- the median home costs. Higher means less affordable.
+-- Price-to-income ratios by county and year (how many years of income the
+-- median home costs). Higher = less affordable.
 --
--- Covers the years the CSO earnings data covers. Household income exists for
--- 2022 only, so those two columns are null in every other year.
+-- Only covers years with CSO earnings data. Household income is 2022 only,
+-- so those two columns are null for other years.
 
 with prices as (
 

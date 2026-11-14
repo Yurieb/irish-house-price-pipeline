@@ -1,4 +1,4 @@
--- Median sale price and number of sales for each county and year.
+-- Median price and number of sales by county and year.
 
 select
     county || '-' || sale_year as county_year_key,

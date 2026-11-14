@@ -1,5 +1,5 @@
--- Year-on-year change in the median price for each county.
--- The first year for each county has no previous year, so its change is null.
+-- Year-on-year change in median price by county.
+-- First year has no previous year so the change is null.
 
 with prices as (
 

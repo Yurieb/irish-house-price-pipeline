@@ -1,5 +1,5 @@
-# Connection settings for dbt. Every value is read from an environment
-# variable, so this file holds no secrets and is safe to commit.
+# dbt connection settings. Everything comes from environment variables
+# so there are no secrets in this file.
 house_prices:
   target: dev
   outputs:

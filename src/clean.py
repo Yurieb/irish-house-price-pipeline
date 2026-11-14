@@ -1,10 +1,9 @@
-"""Clean the raw files in data/raw/ and write the results to data/clean/.
+"""Clean the raw files in data/raw/ and save them to data/clean/.
 
-Run from the project root, after src/ingest.py:
+Run after ingest.py:
     python src/clean.py
 
-Prints the row count before and after each step, so every dropped row is
-accounted for.
+Prints row counts before and after so we can see what got dropped.
 """
 
 from pathlib import Path
@@ -27,7 +26,7 @@ COUNTIES = [
 
 
 def check_counties(df: pd.DataFrame, source: str) -> None:
-    """Stop the pipeline if a county name is not one of the 26 we expect."""
+    """Raise an error if a county isn't one of the 26."""
     unknown = set(df["county"]) - set(COUNTIES)
     if unknown:
         raise ValueError(f"Unknown counties in {source}: {sorted(unknown)}")
@@ -36,9 +35,8 @@ def check_counties(df: pd.DataFrame, source: str) -> None:
 def clean_ppr() -> None:
     print("Property Price Register")
 
-    # The file is Windows-1252 encoded, not UTF-8: that is how the euro sign
-    # and Irish fadas in addresses are stored. dtype=str stops pandas guessing
-    # types, so we convert each column ourselves.
+    # PPR file is Windows-1252 not UTF-8 (the euro sign breaks UTF-8).
+    # read everything as text and convert the columns ourselves
     df = pd.read_csv(RAW_DIR / "ppr_all.csv", encoding="cp1252", dtype=str)
     df = transform_ppr(df)
     df.to_csv(CLEAN_DIR / "ppr_sales.csv", index=False, encoding="utf-8")
@@ -46,10 +44,9 @@ def clean_ppr() -> None:
 
 
 def transform_ppr(df: pd.DataFrame) -> pd.DataFrame:
-    """Turn raw PPR rows into clean ones.
+    """Clean the raw PPR rows.
 
-    Kept separate from the file reading and writing so the tests can call it
-    with a few hand-made rows.
+    Separate from the file reading/writing so it can be tested with a few rows.
     """
     df.columns = [
         "sale_date", "address", "county", "eircode", "price",
@@ -57,28 +54,27 @@ def transform_ppr(df: pd.DataFrame) -> pd.DataFrame:
     ]
     print(f"  {len(df):>9,} rows read")
 
-    # Sales between family members, part-sales and similar are flagged as not
-    # full market price. They would drag the medians down, so drop them.
+    # drop sales not at full market price (e.g. family transfers), they skew the median
     df = df[df["not_full_market_price"] == "No"]
     print(f"  {len(df):>9,} after dropping sales not at full market price")
 
-    # Rows identical in every column are the same sale entered twice.
+    # exact duplicate rows = same sale entered twice
     df = df.drop_duplicates()
     print(f"  {len(df):>9,} after dropping exact duplicate rows")
 
-    # "01/01/2010" -> a real date. A date that does not parse raises an error.
+    # "01/01/2010" -> date, errors if the date is invalid
     df["sale_date"] = pd.to_datetime(df["sale_date"], format="%d/%m/%Y").dt.date
 
     # "€343,000.00" -> 343000.0
     df["price"] = df["price"].str.replace("[€,]", "", regex=True).astype(float)
 
-    # Add VAT to VAT-exclusive prices so every price is what the buyer paid.
+    # add VAT where the price excludes it, so all prices are what the buyer paid
     df["vat_added"] = df["vat_exclusive"] == "Yes"
     df.loc[df["vat_added"], "price"] *= 1 + VAT_RATE
     df["price"] = df["price"].round(2)
     print(f"  {df['vat_added'].sum():>9,} prices had VAT added")
 
-    # The description is in English or Irish: "New ..." or "... Nua" is a new build.
+    # description can be English or Irish - "New ..." or "... Nua" is a new build
     df["is_new_build"] = df["description"].str.startswith("New") | df["description"].str.endswith("Nua")
 
     df["county"] = df["county"].str.strip()
@@ -88,7 +84,7 @@ def transform_ppr(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def clean_cso(raw_name: str, clean_name: str, statistic: str, value_name: str) -> None:
-    """Keep one statistic from a CSO table, for the 26 counties only."""
+    """Keep one statistic from a CSO table for the 26 counties."""
     print(f"CSO {raw_name}")
     df = pd.read_csv(RAW_DIR / raw_name)
     print(f"  {len(df):>9,} rows read")
@@ -99,7 +95,7 @@ def clean_cso(raw_name: str, clean_name: str, statistic: str, value_name: str) -
         df = df[df["Sex"] == "Both sexes"]
     print(f"  {len(df):>9,} after keeping '{statistic}'")
 
-    # "Co. Dublin" -> "Dublin", to match the PPR. Drop the national total.
+    # "Co. Dublin" -> "Dublin" to match the PPR, and drop the Ireland total
     df = df[df["County"] != "Ireland"]
     df["county"] = df["County"].str.replace("Co. ", "", regex=False).str.strip()
     check_counties(df, raw_name)

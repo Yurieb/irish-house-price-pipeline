@@ -1,4 +1,4 @@
-"""Database connection, shared by every script that talks to Postgres."""
+"""Database connection used by the other scripts."""
 
 import os
 
@@ -7,10 +7,10 @@ from sqlalchemy import URL, Engine, create_engine
 
 
 def get_engine() -> Engine:
-    """Build a SQLAlchemy engine from the POSTGRES_* environment variables.
+    """Create a SQLAlchemy engine from the POSTGRES_* environment variables.
 
-    Locally these come from the .env file. In Docker and GitHub Actions they
-    are set as real environment variables, and load_dotenv() does nothing.
+    Locally these come from .env. In Docker and GitHub Actions they are set
+    directly so load_dotenv() does nothing.
     """
     load_dotenv()
     url = URL.create(

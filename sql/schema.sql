@@ -1,7 +1,5 @@
--- Raw layer: one table per cleaned CSV file, loaded by src/load.py.
--- dbt reads from this schema and builds the staging and mart models on top.
---
--- Every statement uses IF NOT EXISTS, so this file is safe to run repeatedly.
+-- Raw tables, one per cleaned CSV. Loaded by src/load.py, then dbt builds on top.
+-- IF NOT EXISTS everywhere so it can be run more than once.
 
 CREATE SCHEMA IF NOT EXISTS raw;
 

@@ -7,10 +7,9 @@ test-paths: ["tests"]
 
 models:
   house_prices:
-    # Staging models are views: light tidy-ups that always reflect the raw data.
+    # staging = views, just light tidy-ups of the raw tables
     staging:
       +materialized: view
-    # Marts are tables: the medians are computed once, so the app and
-    # Power BI read them instantly.
+    # marts = tables so the app and Power BI don't recalculate the medians every time
     marts:
       +materialized: table

@@ -1,4 +1,4 @@
--- One row per property sale at full market price, VAT included.
+-- One row per sale (full market price, VAT included).
 
 select
     sale_id,
@@ -6,5 +6,6 @@ select
     extract(year from sale_date)::int as sale_year,
     county,
     price,
-    is_new_build
+    is_new_build,
+    loaded_at
 from {{ source('raw', 'ppr_sales') }}

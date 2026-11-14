@@ -68,6 +68,8 @@ models:
           - not_null
       - name: is_new_build
         description: True for a new home, false for a second-hand one.
+      - name: loaded_at
+        description: When the row was loaded into the database.
 
   - name: stg_household_income
     description: Median gross household income per county. Published for 2022 only.

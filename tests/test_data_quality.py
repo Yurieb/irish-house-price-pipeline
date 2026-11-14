@@ -1,7 +1,6 @@
 """Data quality tests on the real cleaned PPR file.
 
-These check the output of src/clean.py. They are skipped when the file does
-not exist, for example on a fresh clone before the pipeline has been run.
+Skipped if the file doesn't exist (e.g. a fresh clone before the pipeline is run).
 """
 
 import datetime
@@ -21,7 +20,7 @@ pytestmark = pytest.mark.skipif(
 
 @pytest.fixture(scope="module")
 def sales() -> pd.DataFrame:
-    """Read the file once and share it between the tests in this module."""
+    """Read the file once and share it between the tests."""
     return pd.read_csv(CLEAN_FILE, parse_dates=["sale_date"])
 
 
@@ -42,7 +41,7 @@ def test_no_null_dates(sales):
 
 
 def test_dates_are_in_a_valid_range(sales):
-    # The register starts in 2010, and a sale cannot be dated in the future.
+    # PPR starts in 2010 and a sale can't be in the future
     assert sales["sale_date"].min() >= pd.Timestamp(2010, 1, 1)
     assert sales["sale_date"].max() <= pd.Timestamp(datetime.date.today())
 

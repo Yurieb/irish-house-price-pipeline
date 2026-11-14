@@ -83,3 +83,28 @@ models:
         description: Median gross household income in euro. Available for 2022 only.
       - name: price_to_household_income
         description: Median price divided by median gross household income. 2022 only.
+
+  - name: mart_latest_price
+    description: >
+      Median sale price for each county over the most recent 12 months of data.
+      Used by the app's affordability calculator.
+    columns:
+      - name: county
+        description: One of the 26 counties. One row per county.
+        data_tests:
+          - unique
+          - not_null
+      - name: period_start
+        description: First day of the 12-month window.
+      - name: period_end
+        description: Date of the most recent sale in the data.
+        data_tests:
+          - not_null
+      - name: data_loaded_at
+        description: When the sales data was last loaded into the database.
+      - name: sales_count
+        description: Number of sales in the window.
+      - name: median_price
+        description: Median sale price in euro, including VAT.
+        data_tests:
+          - not_null

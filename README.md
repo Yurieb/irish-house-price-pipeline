@@ -16,6 +16,23 @@ and a Power BI dashboard.
   residential property sale in Ireland since 2010.
 - [CSO PxStat](https://data.cso.ie/) - household income statistics from the
   Central Statistics Office.
+- [Tailte Éireann county boundaries](https://data-osi.opendata.arcgis.com/datasets/osi::counties-national-statutory-boundaries-2019-generalised-20m) -
+  the county shapes on the map, used under the
+  [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) licence and simplified
+  to reduce file size.
+
+## Mortgage rules
+
+The affordability calculator applies the
+[Central Bank of Ireland mortgage measures](https://www.centralbank.ie/financial-system/financial-stability/macro-prudential-policy/mortgage-measures):
+
+- **Loan-to-income limit:** a mortgage of at most 4 times gross annual income for
+  first-time buyers, and 3.5 times for second and subsequent buyers.
+- **Loan-to-value limit:** a mortgage of at most 90% of the property's value, so a
+  deposit of at least 10%.
+
+Lenders may exceed these limits for a share of their lending, which the calculator
+does not model.
 
 ## Tech stack
 

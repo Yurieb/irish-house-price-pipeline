@@ -1,4 +1,4 @@
--- Median gross household income per county. The CSO publishes 2022 only.
+-- Median gross household income by county. CSO only has 2022.
 
 select
     county,

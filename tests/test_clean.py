@@ -1,7 +1,7 @@
 """Unit tests for the cleaning rules.
 
-Each test builds a few raw rows by hand, runs them through transform_ppr and
-checks the result. No data files are needed, so these run anywhere.
+Each test makes a few raw rows by hand and runs them through transform_ppr,
+so no data files are needed.
 """
 
 import datetime
@@ -19,7 +19,7 @@ RAW_COLUMNS = [
 
 
 def raw_row(**changes) -> dict:
-    """One valid raw PPR row. Pass keyword arguments to change any value."""
+    """A valid raw PPR row. Pass keyword arguments to change values."""
     row = {
         "Date of Sale (dd/mm/yyyy)": "15/03/2024",
         "Address": "1 Main Street",
@@ -47,7 +47,7 @@ def test_price_text_becomes_a_number():
 
 def test_date_text_becomes_a_date():
     result = clean(raw_row(**{"Date of Sale (dd/mm/yyyy)": "03/01/2010"}))
-    # Day first: this is 3 January, not 1 March.
+    # day first, so 3 January not 1 March
     assert result["sale_date"].iloc[0] == datetime.date(2010, 1, 3)
 
 

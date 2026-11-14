@@ -1,0 +1,4 @@
+# light theme so the chart colours always have the same background
+[theme]
+base = "light"
+primaryColor = "#2a78d6"

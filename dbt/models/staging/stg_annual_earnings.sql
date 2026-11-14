@@ -1,4 +1,4 @@
--- Median annual earnings of one person, per county, year and age group.
+-- Median annual earnings by county, year and age group.
 
 select
     county,
