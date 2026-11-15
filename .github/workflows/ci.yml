@@ -1,0 +1,38 @@
+name: CI
+
+# run on every push, or manually from the Actions tab
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install packages
+        run: pip install -r requirements.txt
+
+      # the data quality tests skip themselves here because the data files are not in the repo
+      - name: Run tests
+        run: pytest -v
+
+      # dbt parse checks the models and yml files are valid without needing a database,
+      # so these are placeholder values and not real credentials
+      - name: Check the dbt project
+        run: dbt parse --project-dir dbt --profiles-dir dbt
+        env:
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: 5432
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: ci

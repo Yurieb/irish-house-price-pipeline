@@ -1,5 +1,7 @@
 # Irish House Price Pipeline
 
+[![CI](https://github.com/Yurieb/irish-house-price-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/Yurieb/irish-house-price-pipeline/actions/workflows/ci.yml)
+
 An end-to-end data pipeline that answers one question: **where in Ireland can a
 young person afford a home?**
 
