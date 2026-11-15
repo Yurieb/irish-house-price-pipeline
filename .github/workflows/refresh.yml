@@ -1,0 +1,48 @@
+name: Monthly refresh
+
+# 06:00 UTC on the 1st of every month, or manually from the Actions tab
+on:
+  schedule:
+    - cron: "0 6 1 * *"
+  workflow_dispatch:
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+
+    # database details for AWS RDS, stored in GitHub Secrets and never in the repo
+    env:
+      POSTGRES_HOST: ${{ secrets.POSTGRES_HOST }}
+      POSTGRES_PORT: ${{ secrets.POSTGRES_PORT }}
+      POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+      POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install packages
+        run: pip install -r requirements.txt
+
+      - name: Download the latest data
+        run: python src/ingest.py
+
+      - name: Clean the data
+        run: python src/clean.py
+
+      # the data files exist at this point so the data quality tests run too
+      - name: Run tests
+        run: pytest -v
+
+      - name: Load into the database
+        run: python src/load.py
+
+      - name: Build and test the dbt models
+        run: dbt build --project-dir dbt --profiles-dir dbt
