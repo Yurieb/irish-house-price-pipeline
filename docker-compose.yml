@@ -1,3 +1,9 @@
+# Runs everything with one command:
+#   docker compose up --build
+#
+# db starts first, then pipeline downloads and loads the data and builds the
+# dbt models, then app serves the result at http://localhost:8501
+
 services:
   db:
     image: postgres:17
@@ -17,6 +23,40 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+
+  pipeline:
+    build: .
+    # wait until postgres is ready, not just started
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    # inside the docker network the database is reached by its service name
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+    # keep the downloaded files on the host so they can be inspected
+    volumes:
+      - ./data:/project/data
+    command: >
+      sh -c "python src/ingest.py &&
+             python src/clean.py &&
+             python src/load.py &&
+             dbt build --project-dir dbt --profiles-dir dbt"
+
+  app:
+    build: .
+    # only start once the pipeline has finished without errors
+    depends_on:
+      pipeline:
+        condition: service_completed_successfully
+    env_file: .env
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+    ports:
+      - "8501:8501"
+    command: streamlit run app/app.py --server.address 0.0.0.0 --server.headless true
 
 volumes:
   pgdata:

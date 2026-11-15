@@ -63,3 +63,14 @@ Copy-Item .env.example .env
 ```
 
 Then edit `.env` and set your own database password.
+
+## Run everything with Docker
+
+With Docker Desktop running and a `.env` file in place:
+
+```powershell
+docker compose up --build
+```
+
+This starts Postgres, runs the pipeline (download, clean, load, dbt build and
+tests), then serves the app at http://localhost:8501. Press Ctrl+C to stop.
