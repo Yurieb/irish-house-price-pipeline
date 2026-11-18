@@ -13,3 +13,11 @@ models:
     # marts = tables so the app and Power BI don't recalculate the medians every time
     marts:
       +materialized: table
+      # dbt rebuilds these tables every run, which wipes their grants.
+      # this gives the read-only ask user its select back, and does nothing if that user doesn't exist
+      +post-hook: >
+        DO $$ BEGIN
+          IF EXISTS (SELECT FROM pg_roles WHERE rolname = '{{ env_var("ASK_POSTGRES_USER", "ask_reader") }}') THEN
+            EXECUTE 'GRANT SELECT ON {{ this }} TO {{ env_var("ASK_POSTGRES_USER", "ask_reader") }}';
+          END IF;
+        END $$
