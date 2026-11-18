@@ -5,6 +5,8 @@
 An end-to-end data pipeline that answers one question: **where in Ireland can a
 young person afford a home?**
 
+**Live app:** https://irish-house-price-pipeline-aebk9dcxyvrcgpijabkrxy.streamlit.app
+
 It combines Property Price Register sale records with CSO household income data
 to produce affordability metrics by county, served through a Streamlit web app
 and a Power BI dashboard.
