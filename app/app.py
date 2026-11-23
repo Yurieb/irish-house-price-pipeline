@@ -14,6 +14,7 @@ import streamlit as st
 sys.path.append(str(Path(__file__).resolve().parents[1] / "src"))
 
 from affordability import limiting_factor, max_mortgage, max_price
+from ask import MAX_QUESTION_LENGTH, ask
 from charts import county_map, trend_chart
 from db import get_engine
 
@@ -22,6 +23,11 @@ CENTRAL_BANK_URL = (
     "macro-prudential-policy/mortgage-measures"
 )
 MAX_COUNTIES_ON_CHART = 4
+EXAMPLE_QUESTIONS = [
+    "Which county is the most affordable for young people in 2025?",
+    "Which 5 counties had the biggest price rise in 2025?",
+    "How has the median price in Dublin changed since 2015?",
+]
 
 st.set_page_config(page_title="Irish Home Affordability", page_icon="🏠", layout="wide")
 
@@ -30,6 +36,12 @@ st.set_page_config(page_title="Irish Home Affordability", page_icon="🏠", layo
 def load_table(table: str) -> pd.DataFrame:
     """Read a mart table. Cached for an hour so we don't hit the db on every click."""
     return pd.read_sql(f"select * from analytics.{table}", get_engine())
+
+
+@st.cache_data(ttl=3600, max_entries=200, show_spinner=False)
+def cached_ask(question: str):
+    """Same question within the hour gets the saved answer instead of another AI call."""
+    return ask(question)
 
 
 def euro(amount: float) -> str:
@@ -177,6 +189,58 @@ else:
     st.caption(
         f"{period_end:%Y} is a part-year: it only includes sales up to {long_date(period_end)}."
     )
+
+# ask the data
+
+st.header("Ask the data")
+st.caption(
+    "Ask a question in plain English. An AI writes a database query, it's checked to make sure "
+    "it only reads the summary tables, and the result is summed up for you. AI can get things "
+    "wrong, so check the table and the query below the answer."
+)
+
+
+# the buttons only flag that a question is waiting, the AI call happens further down
+# so it can show a spinner in the right place
+def ask_typed_question():
+    st.session_state.ask_pending = True
+
+
+def ask_example(question: str):
+    st.session_state.ask_box = question
+    st.session_state.ask_pending = True
+
+
+st.text_input(
+    "Your question",
+    key="ask_box",
+    max_chars=MAX_QUESTION_LENGTH,
+    placeholder="e.g. What was the median price in Galway in 2024?",
+    on_change=ask_typed_question,  # pressing enter asks too
+)
+
+with st.container(horizontal=True):
+    st.button("Ask", type="primary", icon=":material/send:", on_click=ask_typed_question)
+    for example in EXAMPLE_QUESTIONS:
+        st.button(example, on_click=ask_example, args=(example,))
+
+if st.session_state.pop("ask_pending", False) and st.session_state.ask_box.strip():
+    with st.spinner("Working it out..."):
+        st.session_state.ask_result = cached_ask(st.session_state.ask_box.strip())
+
+result = st.session_state.get("ask_result")
+if result:
+    st.markdown(f"**{result.question}**")
+    if result.ok:
+        st.success(result.answer, icon=":material/chat:")
+    else:
+        st.warning(result.answer)
+
+    if result.data is not None and not result.data.empty:
+        st.dataframe(result.data, hide_index=True, alt=f"Query result for: {result.question}")
+    if result.sql:
+        with st.expander("Show the SQL query", icon=":material/code:"):
+            st.code(result.sql, language="sql")
 
 # notes
 
