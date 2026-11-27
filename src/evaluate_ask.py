@@ -8,7 +8,7 @@ answer is in the top row of its result table (or, for a list, it has the same co
 Needs the same .env settings as src/ask.py. Makes about 40 AI calls (a few cents).
 
     python src/evaluate_ask.py
-    python src/evaluate_ask.py --model eu.amazon.nova-pro-v1:0    # try another model
+    python src/evaluate_ask.py --model eu.amazon.nova-lite-v1:0    # try another model
 """
 
 import argparse

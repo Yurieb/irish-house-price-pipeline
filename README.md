@@ -71,8 +71,8 @@ flowchart LR
 "Longford is the most affordable county for young people in 2025."
 ```
 
-The AI runs on **Amazon Bedrock** (Amazon Nova Lite), called with boto3's Converse API, so
-changing model is a one-line config change.
+The AI runs on **Amazon Bedrock** (Amazon Nova Pro, chosen because it scored best in the
+evaluation below), called with boto3's Converse API, so changing model is a one-line config change.
 
 **Security comes in layers**, so one mistake can't do damage on its own:
 
