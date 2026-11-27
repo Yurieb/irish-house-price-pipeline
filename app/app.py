@@ -194,9 +194,9 @@ else:
 
 st.header("Ask the data")
 st.caption(
-    "Ask a question in plain English. An AI writes a database query, it's checked to make sure "
-    "it only reads the summary tables, and the result is summed up for you. AI can get things "
-    "wrong, so check the table and the query below the answer."
+    "Ask a question in plain English. An AI agent looks up the answer in the database, using "
+    "queries that are checked so they can only read the summary tables. AI can get things "
+    "wrong, so check the table and the steps below the answer."
 )
 
 
@@ -238,13 +238,14 @@ if result:
 
     if result.data is not None and not result.data.empty:
         st.dataframe(result.data, hide_index=True, alt=f"Query result for: {result.question}")
-    if result.sql:
-        with st.expander("Show the SQL query", icon=":material/code:"):
-            st.code(result.sql, language="sql")
-            # if the AI had to fix its query, show what it tried first and why that didn't work
-            for number, attempt in enumerate(result.attempts, start=1):
-                st.caption(f"Attempt {number} didn't work. {attempt.problem}")
-                st.code(attempt.sql, language="sql")
+    if result.steps:
+        label = f"How it worked it out ({len(result.steps)} step{'s' if len(result.steps) != 1 else ''})"
+        with st.expander(label, icon=":material/code:"):
+            # every tool the agent called, in order, including the ones that didn't work
+            for number, step in enumerate(result.steps, start=1):
+                icon = ":material/check:" if step.worked else ":material/close:"
+                st.caption(f"{icon} Step {number}: `{step.tool}` → {step.outcome}")
+                st.code(step.detail, language="sql" if step.tool == "run_sql" else None)
 
 # notes
 

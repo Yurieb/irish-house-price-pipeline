@@ -5,7 +5,7 @@ the database, so the answers stay correct after every monthly refresh. The AI ge
 the question through the normal ask() flow and it counts as right if the correct
 answer is in the top row of its result table (or, for a list, it has the same counties).
 
-Needs the same .env settings as src/ask.py. Makes about 40 AI calls (a few cents).
+Needs the same .env settings as src/ask.py. Makes a few AI calls per question (a few cents in total).
 
     python src/evaluate_ask.py
     python src/evaluate_ask.py --model eu.amazon.nova-lite-v1:0    # try another model
@@ -121,36 +121,41 @@ def main():
         expected = ask.run_query(truth_sql)
         result = ask.ask(question)
         correct = is_correct(expected, result.data)
-        retries = len(result.attempts)
+        tool_calls = len(result.steps)
+        failed_calls = sum(not step.worked for step in result.steps)
         rows.append((question, shorten(expected), shorten(result.data) if result.ok else result.answer,
-                     correct, retries))
-        retried = f"  ({retries} {'retry' if retries == 1 else 'retries'})" if retries else ""
-        print(f"{'PASS' if correct else 'FAIL'}  {number:2}. {question}{retried}")
+                     correct, tool_calls, failed_calls))
+        recovered = f", {failed_calls} didn't work" if failed_calls else ""
+        calls_text = f"{tool_calls} tool call{'s' if tool_calls != 1 else ''}"
+        print(f"{'PASS' if correct else 'FAIL'}  {number:2}. {question}  ({calls_text}{recovered})")
         if not correct:
             print(f"          expected: {shorten(expected)}")
             print(f"          got:      {rows[-1][2]}")
 
     score = sum(row[3] for row in rows)
-    needed_fix = sum(row[4] > 0 for row in rows)
+    total_calls = sum(row[4] for row in rows)
+    recovered = sum(row[5] > 0 for row in rows)
     print(f"\nScore: {score}/{len(CASES)} correct with {model}")
-    print(f"{needed_fix} question(s) needed at least one retry")
+    print(f"{total_calls} tool calls in total. {recovered} question(s) had a call that didn't work")
 
     lines = [
         "# Ask the data: evaluation",
         "",
         f"**{score}/{len(CASES)} correct** with `{model}` on {date.today():%d %B %Y}. "
-        f"{needed_fix} question(s) needed at least one retry.",
+        f"The agent made {total_calls} tool calls in total, and {recovered} question(s) had a call "
+        "that didn't work (rejected, an error, or no rows) before it carried on.",
         "",
         "Made by `python src/evaluate_ask.py`. Right answers come from hand-written SQL run on the same "
         "database. An answer counts as correct when the right value is in the top row of the AI's "
         "result table, or for a list question, when it has exactly the same counties.",
         "",
-        "| # | Question | Correct answer | AI's result | Retries | |",
+        "| # | Question | Correct answer | AI's result | Tool calls | |",
         "|---|---|---|---|---|---|",
     ]
-    for number, (question, expected, got, correct, retries) in enumerate(rows, start=1):
+    for number, (question, expected, got, correct, calls, failed) in enumerate(rows, start=1):
         got = got.replace("|", "/").replace("\n", " ")
-        lines.append(f"| {number} | {question} | {expected} | {got} | {retries} | {'✅' if correct else '❌'} |")
+        calls_text = f"{calls} ({failed} didn't work)" if failed else str(calls)
+        lines.append(f"| {number} | {question} | {expected} | {got} | {calls_text} | {'✅' if correct else '❌'} |")
     REPORT.parent.mkdir(exist_ok=True)
     REPORT.write_text("\n".join(lines) + "\n", encoding="utf-8")
     print(f"Report saved to {REPORT.relative_to(REPORT.parents[1])}")

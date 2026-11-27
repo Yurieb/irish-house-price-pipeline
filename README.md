@@ -25,8 +25,8 @@ under Central Bank rules. In the 12 months to 6 November 2026, that bought the m
 - **Price trends since 2010.** Compare up to four counties on median price, price compared with
   earnings, and yearly change.
 - **Ask the data.** Type a question in plain English, such as *"Which 5 counties had the biggest
-  price rise in 2025?"*, and an AI answers it from the database. The table and the SQL behind
-  every answer are shown so they can be checked.
+  price rise in 2025?"*, and an AI agent looks up the answer in the database. The table and
+  every step it took are shown so they can be checked.
 
 ## How it works
 
@@ -61,24 +61,35 @@ flowchart LR
 
 ## Ask the data
 
+Ask the data is an **AI agent**: the model is given a goal and two tools, and it decides which
+tool to call, looks at the result, and keeps going until it can answer.
+
+| Tool | What it does |
+|---|---|
+| `run_sql` | Runs a SELECT on the mart tables and returns the rows |
+| `distinct_values` | Lists the values in one column, e.g. how counties are spelled or which years exist |
+
 ```
-"Which county is the most affordable for young people in 2025?"
-  1. the AI gets the mart table columns and the question, and writes one SQL query
-  2. the query is checked: a single SELECT, mart tables only, at most 100 rows
-  3. it runs as a read-only database user with a 5 second timeout
-     if it's rejected, errors or finds no rows, the AI is told why and tries again (3 tries max)
-  4. the AI sums up the result in one or two sentences
-"Longford is the most affordable county for young people in 2025."
+"What was the median price in county Corke last year?"
+  step 1  run_sql   select extract(year from current_date) - 1        -> 1 row (2025)
+  step 2  run_sql   select median_price ... where county = 'Cork' and year = 2025   -> 1 row
+"The median price in county Cork last year was €370,000."
 ```
 
-The AI runs on **Amazon Bedrock** (Amazon Nova Pro, chosen because it scored best in the
-evaluation below), called with boto3's Converse API, so changing model is a one-line config change.
+If a query is rejected, errors or finds no rows, the agent sees why and tries something else.
+It gets at most 6 turns, so it can't loop forever, and **it is never allowed to answer without
+data**: if it hasn't run a query that returned rows, the app says it couldn't find the answer.
+
+The model is **Amazon Nova Pro** on **Amazon Bedrock**, chosen because it scored best in the
+evaluation below. It is called with tool use through boto3's Converse API, so changing model is
+a one-line config change.
 
 **Security comes in layers**, so one mistake can't do damage on its own:
 
-1. **The query is checked in code.** [`check_sql`](src/ask.py) parses the SQL with sqlglot,
+1. **Every query is checked in code.** [`check_sql`](src/ask.py) parses the SQL with sqlglot,
    rather than searching the text. It rejects anything that isn't a single SELECT,
    including writes hidden inside a `WITH`, and any table that isn't one of the four marts.
+   `distinct_values` only accepts table and column names that really exist in the marts.
 2. **The database user can only read.** `ask_reader` has SELECT on the four mart tables and
    nothing else. It is set to read-only, with a 5 second statement timeout, so even a query that got
    past the check couldn't change data or run for long. A dbt post-hook re-grants access after
@@ -95,20 +106,28 @@ down, bad query, timeout) shows a friendly message instead of an error.
 answer comes from hand-written SQL run on the same database, so the test stays correct after
 every refresh.
 
-| Model | Score |
-|---|---|
-| Amazon Nova Pro | **20/20** |
-| Amazon Nova Lite | 19/20 |
+I measured each version of the feature as I built it:
 
-Nova Lite's miss was *"How many homes were sold in Cork in 2024?"*. It used the "last 12
-months" table instead of the yearly one and found no rows. Self-correction told it so twice,
-but it wrote the same query each time, so the app said no data was found rather than giving a
-wrong number. Nova Pro got that question right first time. The lesson: retrying with feedback
-only helps if the model is strong enough to use it. Full results for the latest run are in
-[docs/ask_evaluation.md](docs/ask_evaluation.md).
+| Version | Nova Pro | Nova Lite |
+|---|---|---|
+| Fixed steps: one query, then retry with the error (up to 3 tries) | 20/20 | 19/20 |
+| **Agent with tools** (current) | **20/20** | 19/20 |
 
-The feature also has 36 pytest tests covering the safety checks, error handling and
-self-correction, with Bedrock and the database mocked so they run free in CI.
+What the numbers hide:
+
+- **Retrying only helps if the model can use the feedback.** With fixed retries, Nova Lite got
+  *"How many homes were sold in Cork in 2024?"* wrong. It used the "last 12 months" table, was
+  told it found no rows, and wrote the same query twice more.
+- **As an agent, Nova Lite solved the Cork question**, recovering after 4 tool calls, but on a
+  different question it tried to answer without running any query. The no-data-no-answer rule
+  blocked it, so the app said it couldn't find the answer instead of risking a made-up number.
+- **Nova Pro** got 20/20 both ways. As an agent it needed 21 tool calls for 20 questions, and
+  recovered by itself once when a query didn't work.
+
+Full results for the latest run are in [docs/ask_evaluation.md](docs/ask_evaluation.md).
+
+The feature also has 39 pytest tests covering the safety checks, the agent loop, recovering from
+mistakes and error handling, with Bedrock and the database mocked so they run free in CI.
 
 ## Data sources
 
