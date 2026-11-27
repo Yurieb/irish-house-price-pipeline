@@ -89,24 +89,36 @@ def test_clean_reply_strips_markdown_fences():
 
 # the whole ask() flow, with a fake AI and a fake database
 
+SUMMARY = "Longford is the cheapest county."
+LONGFORD = pd.DataFrame({"county": ["Longford"], "median_price": [210_000]})
+
+
 @pytest.fixture
 def fake(monkeypatch):
-    """Replace the AI and the database. Set fake.replies to choose what the AI says."""
+    """Replace the AI and the database.
+
+    fake.replies are the queries the AI writes, one per try (the last one repeats).
+    fake.results are what the database returns, one per query run (the last one repeats).
+    """
 
     class Fake:
-        replies = [GOOD_SQL, "Longford is the cheapest county."]
+        replies = [GOOD_SQL]
+        results = [LONGFORD]
         queries_run = []
+        messages = []
         ai_calls = 0
 
     def fake_model(instructions, message):
         Fake.ai_calls += 1
-        return Fake.replies.pop(0)
+        if instructions == ask.SUMMARY_INSTRUCTIONS:
+            return SUMMARY
+        Fake.messages.append(message)
+        return Fake.replies.pop(0) if len(Fake.replies) > 1 else Fake.replies[0]
 
     def fake_run_query(query):
         Fake.queries_run.append(query)
-        return pd.DataFrame({"county": ["Longford"], "median_price": [210_000]})
+        return Fake.results.pop(0) if len(Fake.results) > 1 else Fake.results[0]
 
-    Fake.queries_run = []
     monkeypatch.setattr(ask, "call_model", fake_model)
     monkeypatch.setattr(ask, "run_query", fake_run_query)
     monkeypatch.setattr(ask, "table_schemas", lambda: "- analytics.mart_latest_price (county text)")
@@ -117,13 +129,15 @@ def test_ask_answers_a_question(fake):
     result = ask.ask("Which county is cheapest?")
 
     assert result.ok
-    assert result.answer == "Longford is the cheapest county."
+    assert result.answer == SUMMARY
     assert "LIMIT 100" in result.sql
     assert result.data["county"].tolist() == ["Longford"]
     assert len(fake.queries_run) == 1
+    assert result.attempts == []
 
 
 def test_unsafe_ai_query_is_never_run(fake):
+    # the AI keeps writing the same bad query on every try
     fake.replies = ["drop table analytics.mart_latest_price"]
 
     result = ask.ask("delete everything")
@@ -133,6 +147,64 @@ def test_unsafe_ai_query_is_never_run(fake):
     assert fake.queries_run == []
     # the rejected query is still shown so people can see what the AI tried
     assert result.sql == "drop table analytics.mart_latest_price"
+    # it gave up after the maximum number of tries
+    assert len(fake.messages) == ask.MAX_ATTEMPTS
+
+
+# fixing its own mistakes
+
+def test_fixes_a_query_the_safety_check_rejected(fake):
+    fake.replies = ["select * from raw.ppr_sales", GOOD_SQL]
+
+    result = ask.ask("Which county is cheapest?")
+
+    assert result.ok
+    assert len(result.attempts) == 1
+    assert "raw.ppr_sales" in result.attempts[0].problem
+    # the retry told the AI what was wrong
+    assert "raw.ppr_sales" in fake.messages[1]
+    # the rejected query was never run
+    assert len(fake.queries_run) == 1
+
+
+def test_fixes_a_query_that_found_no_rows(fake):
+    fake.results = [pd.DataFrame({"county": []}), LONGFORD]
+
+    result = ask.ask("Which county is cheapest?")
+
+    assert result.ok
+    assert result.data["county"].tolist() == ["Longford"]
+    assert len(result.attempts) == 1
+    assert "no rows" in result.attempts[0].problem
+    assert "no rows" in fake.messages[1]
+
+
+def test_fixes_a_query_the_database_couldnt_run(fake, monkeypatch):
+    calls = []
+
+    def fails_once(query):
+        calls.append(query)
+        if len(calls) == 1:
+            raise OperationalError(query, {}, Exception('column "yr" does not exist'))
+        return LONGFORD
+
+    monkeypatch.setattr(ask, "run_query", fails_once)
+
+    result = ask.ask("Which county is cheapest?")
+
+    assert result.ok
+    assert 'column "yr" does not exist' in fake.messages[1]
+
+
+def test_still_no_rows_after_every_try_says_no_data(fake):
+    fake.results = [pd.DataFrame({"county": []})]
+
+    result = ask.ask("Which counties cost over 5 million?")
+
+    # an empty answer can be the right answer, so it still replies rather than erroring
+    assert result.ok
+    assert len(fake.queries_run) == ask.MAX_ATTEMPTS
+    assert len(result.attempts) == ask.MAX_ATTEMPTS - 1
 
 
 def test_question_the_data_cant_answer(fake):

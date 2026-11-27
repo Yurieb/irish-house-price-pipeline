@@ -121,30 +121,36 @@ def main():
         expected = ask.run_query(truth_sql)
         result = ask.ask(question)
         correct = is_correct(expected, result.data)
-        rows.append((question, shorten(expected), shorten(result.data) if result.ok else result.answer, correct))
-        print(f"{'PASS' if correct else 'FAIL'}  {number:2}. {question}")
+        retries = len(result.attempts)
+        rows.append((question, shorten(expected), shorten(result.data) if result.ok else result.answer,
+                     correct, retries))
+        retried = f"  ({retries} {'retry' if retries == 1 else 'retries'})" if retries else ""
+        print(f"{'PASS' if correct else 'FAIL'}  {number:2}. {question}{retried}")
         if not correct:
             print(f"          expected: {shorten(expected)}")
             print(f"          got:      {rows[-1][2]}")
 
     score = sum(row[3] for row in rows)
+    needed_fix = sum(row[4] > 0 for row in rows)
     print(f"\nScore: {score}/{len(CASES)} correct with {model}")
+    print(f"{needed_fix} question(s) needed at least one retry")
 
     lines = [
         "# Ask the data: evaluation",
         "",
-        f"**{score}/{len(CASES)} correct** with `{model}` on {date.today():%d %B %Y}.",
+        f"**{score}/{len(CASES)} correct** with `{model}` on {date.today():%d %B %Y}. "
+        f"{needed_fix} question(s) needed at least one retry.",
         "",
         "Made by `python src/evaluate_ask.py`. Right answers come from hand-written SQL run on the same "
         "database. An answer counts as correct when the right value is in the top row of the AI's "
         "result table, or for a list question, when it has exactly the same counties.",
         "",
-        "| # | Question | Correct answer | AI's result | |",
-        "|---|---|---|---|---|",
+        "| # | Question | Correct answer | AI's result | Retries | |",
+        "|---|---|---|---|---|---|",
     ]
-    for number, (question, expected, got, correct) in enumerate(rows, start=1):
+    for number, (question, expected, got, correct, retries) in enumerate(rows, start=1):
         got = got.replace("|", "/").replace("\n", " ")
-        lines.append(f"| {number} | {question} | {expected} | {got} | {'✅' if correct else '❌'} |")
+        lines.append(f"| {number} | {question} | {expected} | {got} | {retries} | {'✅' if correct else '❌'} |")
     REPORT.parent.mkdir(exist_ok=True)
     REPORT.write_text("\n".join(lines) + "\n", encoding="utf-8")
     print(f"Report saved to {REPORT.relative_to(REPORT.parents[1])}")

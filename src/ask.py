@@ -4,6 +4,7 @@ How it works:
   1. send the AI the mart table columns and the question, get back one SQL query
   2. check the query is a single SELECT on the mart tables, and cap it at 100 rows
   3. run it as the read-only database user with a 5 second timeout
+     if it's rejected, errors or finds no rows, the AI is told why and tries again (3 tries max)
   4. ask the AI to sum up the result in one or two sentences
 
 Uses Amazon Bedrock through boto3. Needs these in .env (or Streamlit secrets):
@@ -17,7 +18,7 @@ Try it from the terminal:
 import logging
 import os
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
 
 import boto3
@@ -39,6 +40,7 @@ MART_TABLES = {"mart_median_price", "mart_affordability", "mart_price_change", "
 MAX_ROWS = 100
 TIMEOUT_MS = 5000
 MAX_QUESTION_LENGTH = 300
+MAX_ATTEMPTS = 3  # first try plus two fixes, so a confused AI can't loop forever
 
 # things the column names alone don't tell the AI
 TABLE_NOTES = """
@@ -78,12 +80,20 @@ class UnsafeQueryError(ValueError):
 
 
 @dataclass
+class Attempt:
+    """A query that didn't work, and why. Sent back to the AI so it can fix it."""
+    sql: str
+    problem: str
+
+
+@dataclass
 class AskResult:
     question: str
     answer: str
     sql: str | None = None
     data: pd.DataFrame | None = None
     ok: bool = True
+    attempts: list[Attempt] = field(default_factory=list)  # failed tries before the final query
 
 
 # the AI
@@ -100,6 +110,15 @@ def call_model(instructions: str, message: str) -> str:
         inferenceConfig={"maxTokens": 600, "temperature": 0},
     )
     return response["output"]["message"]["content"][0]["text"].strip()
+
+
+def write_query(instructions: str, question: str, attempts: list["Attempt"]) -> str:
+    """Ask the AI for a query. On a retry it also sees its earlier queries and what was wrong with them."""
+    message = question
+    if attempts:
+        earlier = "\n\n".join(f"Query:\n{attempt.sql}\nProblem: {attempt.problem}" for attempt in attempts)
+        message = f"{question}\n\nYour earlier queries didn't work:\n\n{earlier}\n\nWrite a corrected query."
+    return clean_reply(call_model(instructions, message))
 
 
 def clean_reply(reply: str) -> str:
@@ -187,6 +206,12 @@ def run_query(query: str) -> pd.DataFrame:
         return pd.read_sql(text(query), connection)
 
 
+def first_line(error: Exception) -> str:
+    """The useful bit of a database error, e.g. 'column "yr" does not exist', without the whole query."""
+    message = str(getattr(error, "orig", None) or error).strip()
+    return message.splitlines()[0][:300] if message else type(error).__name__
+
+
 # putting it together
 
 def ask(question: str) -> AskResult:
@@ -198,45 +223,71 @@ def ask(question: str) -> AskResult:
         return AskResult(question, f"Please keep your question under {MAX_QUESTION_LENGTH} characters.", ok=False)
 
     sql = None
+    attempts: list[Attempt] = []
     try:
         instructions = SQL_INSTRUCTIONS.format(schema=table_schemas(), notes=TABLE_NOTES)
-        reply = clean_reply(call_model(instructions, question))
-        if reply == "CANNOT_ANSWER":
-            return AskResult(
-                question,
-                "I can only answer questions about house prices, sales and affordability by county. "
-                "Try asking about a county or a year.",
-                ok=False,
-            )
 
-        sql = reply  # so a rejected query can still be shown
-        sql = check_sql(reply)
-        data = run_query(sql)
+        # if a query fails, tell the AI what went wrong and let it try again
+        for number in range(1, MAX_ATTEMPTS + 1):
+            last_try = number == MAX_ATTEMPTS
+            reply = write_query(instructions, question, attempts)
+            if reply == "CANNOT_ANSWER":
+                return AskResult(
+                    question,
+                    "I can only answer questions about house prices, sales and affordability by county. "
+                    "Try asking about a county or a year.",
+                    ok=False,
+                    attempts=attempts,
+                )
+
+            sql = reply  # so a rejected query can still be shown
+            try:
+                sql = check_sql(reply)
+                data = run_query(sql)
+            except UnsafeQueryError as error:
+                if last_try:
+                    raise
+                problem = f"The safety check rejected it: {error}"
+            except (SQLAlchemyError, pd.errors.DatabaseError) as error:  # pandas wraps db errors in its own type
+                if last_try:
+                    raise
+                problem = f"The database gave an error: {first_line(error)}"
+            else:
+                if not data.empty or last_try:
+                    break
+                problem = ("It ran but returned no rows. Check you used the right table "
+                           "and that the filter values match the data.")
+
+            log.info("attempt %d failed: %s", number, problem)
+            attempts.append(Attempt(sql, problem))
 
         result_text = data.head(20).to_csv(index=False) if not data.empty else "(no rows)"
         answer = call_model(SUMMARY_INSTRUCTIONS, f"Question: {question}\n\nResult:\n{result_text}")
-        return AskResult(question, answer, sql=sql, data=data)
+        return AskResult(question, answer, sql=sql, data=data, attempts=attempts)
 
     except UnsafeQueryError as error:
         log.warning("rejected query: %s", error)
         return AskResult(question, f"I couldn't turn that into a safe query. {error} Try rewording your question.",
-                         sql=sql, ok=False)
+                         sql=sql, ok=False, attempts=attempts)
     except (ClientError, BotoCoreError) as error:
         log.exception("bedrock call failed: %s", error)
         return AskResult(question, "The AI service isn't available right now. Please try again in a minute.",
-                         sql=sql, ok=False)
-    except (SQLAlchemyError, pd.errors.DatabaseError) as error:  # pandas wraps db errors in its own type
+                         sql=sql, ok=False, attempts=attempts)
+    except (SQLAlchemyError, pd.errors.DatabaseError) as error:
         log.exception("query failed: %s", error)
         return AskResult(question, "The database couldn't run that query (it may have taken too long). "
-                         "Try a simpler question.", sql=sql, ok=False)
+                         "Try a simpler question.", sql=sql, ok=False, attempts=attempts)
     except Exception as error:
         log.exception("ask failed: %s", error)
-        return AskResult(question, "Something went wrong answering that. Please try again.", sql=sql, ok=False)
+        return AskResult(question, "Something went wrong answering that. Please try again.",
+                         sql=sql, ok=False, attempts=attempts)
 
 
 if __name__ == "__main__":
     result = ask(" ".join(sys.argv[1:]) or "Which county had the highest median price in 2025?")
     print(result.answer)
+    for number, attempt in enumerate(result.attempts, start=1):
+        print(f"\nAttempt {number} didn't work: {attempt.problem}\n{attempt.sql}")
     if result.sql:
         print("\nSQL:\n" + result.sql)
     if result.data is not None:

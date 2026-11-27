@@ -241,6 +241,10 @@ if result:
     if result.sql:
         with st.expander("Show the SQL query", icon=":material/code:"):
             st.code(result.sql, language="sql")
+            # if the AI had to fix its query, show what it tried first and why that didn't work
+            for number, attempt in enumerate(result.attempts, start=1):
+                st.caption(f"Attempt {number} didn't work. {attempt.problem}")
+                st.code(attempt.sql, language="sql")
 
 # notes
 
