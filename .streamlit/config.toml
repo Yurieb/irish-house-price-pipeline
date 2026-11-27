@@ -1,4 +1,12 @@
 # light theme so the chart colours always have the same background
 [theme]
 base = "light"
-primaryColor = "#2a78d6"
+primaryColor = "#2a78d6"  # same blue as the charts
+backgroundColor = "#fcfcfb"  # same as the county borders on the map, so they blend in
+secondaryBackgroundColor = "#f3f2ee"
+textColor = "#1f2328"
+borderColor = "#e4e2dc"
+font = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+headingFontWeights = [700, 600, 600, 600, 500, 500]
+baseRadius = "medium"
+chartCategoricalColors = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100"]  # same as the trend lines

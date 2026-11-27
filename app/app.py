@@ -23,6 +23,8 @@ CENTRAL_BANK_URL = (
     "macro-prudential-policy/mortgage-measures"
 )
 MAX_COUNTIES_ON_CHART = 4
+EXAMPLE_INCOME = 45_000  # the calculator's starting values, also used in the key finding
+EXAMPLE_DEPOSIT = 30_000
 EXAMPLE_QUESTIONS = [
     "Which county is the most affordable for young people in 2025?",
     "Which 5 counties had the biggest price rise in 2025?",
@@ -68,18 +70,37 @@ st.caption(
     "Sources: Property Price Register and Central Statistics Office."
 )
 
+# key finding, worked out from the data so it stays right after each monthly refresh
+
+ratio_year = int(affordability["year"].max())
+ratios = affordability[affordability["year"] == ratio_year].sort_values("price_to_earnings_age_25_29")
+cheapest, dearest = ratios.iloc[0], ratios.iloc[-1]
+example_budget = max_price(EXAMPLE_INCOME, EXAMPLE_DEPOSIT, first_time_buyer=True)
+within_example = int((latest["median_price"] <= example_budget).sum())
+ratio_help = f"Median home price in {ratio_year} divided by the median yearly earnings of a 25 to 29 year old."
+
+with st.container(horizontal=True):
+    st.metric(f"Least affordable: {dearest['county']}", f"{dearest['price_to_earnings_age_25_29']:.1f}× earnings",
+              help=ratio_help, border=True)
+    st.metric(f"Most affordable: {cheapest['county']}", f"{cheapest['price_to_earnings_age_25_29']:.1f}× earnings",
+              help=ratio_help, border=True)
+    st.metric(f"Affordable on {euro(EXAMPLE_INCOME)} with a {euro(EXAMPLE_DEPOSIT)} deposit",
+              f"{within_example} of {len(latest)} counties",
+              help="For a first-time buyer, comparing the most they can pay with each county's median "
+                   "price over the last 12 months.", border=True)
+
 # calculator
 
-st.header("Affordability calculator")
+st.header("Affordability calculator", icon=":material/calculate:")
 
 inputs, results = st.columns([1, 2], gap="large")
 
-with inputs:
+with inputs.container(border=True):
     income = st.number_input(
-        "Gross annual income (€)", min_value=0, value=45_000, step=1_000,
+        "Gross annual income (€)", min_value=0, value=EXAMPLE_INCOME, step=1_000,
         help="Before tax. If you are buying with someone, add both incomes together.",
     )
-    deposit = st.number_input("Deposit (€)", min_value=0, value=30_000, step=1_000)
+    deposit = st.number_input("Deposit (€)", min_value=0, value=EXAMPLE_DEPOSIT, step=1_000)
     first_time_buyer = st.checkbox("First-time buyer", value=True)
 
 mortgage = max_mortgage(income, first_time_buyer)
@@ -135,7 +156,7 @@ st.caption(
 
 # trend charts
 
-st.header("How prices have changed")
+st.header("How prices have changed", icon=":material/trending_up:")
 
 chosen = st.multiselect(
     "Counties to compare",
@@ -192,7 +213,7 @@ else:
 
 # ask the data
 
-st.header("Ask the data")
+st.header("Ask the data", icon=":material/chat:")
 st.caption(
     "Ask a question in plain English. An AI agent looks up the answer in the database, using "
     "queries that are checked so they can only read the summary tables. AI can get things "
@@ -249,7 +270,7 @@ if result:
 
 # notes
 
-st.header("How this works")
+st.header("How this works", icon=":material/info:")
 
 st.markdown(
     f"""
